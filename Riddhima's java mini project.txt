@@ -1,0 +1,271 @@
+import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPasswordField;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.table.DefaultTableModel;
+
+public class PeriodTrackerApp {
+    private static Map<String, String> userCredentials = new HashMap<>();
+    private static Map<String, List<PeriodRecord>> userHistory = new HashMap<>();
+    private static String currentUser;
+    private static boolean rememberMe = false;
+    private static JFrame bigFrame;
+    private static JTextField usernameField;
+    private static JPasswordField passwordField;
+    private static JCheckBox rememberMeCheckbox;
+    private static JTextField startDateField;
+    private static JTextField endDateField;
+    private static JTextField symptomsField;
+    private static JTextField periodLengthField;
+    private static JTextField nextPeriodDateField;
+    private static JTable historyTable;
+    public static void main(String[] args) {
+        bigFrame = new JFrame("Basic Period Tracker");
+        bigFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        bigFrame.setSize(500, 400);
+        JPanel loginPanel = createLoginPanel();
+        bigFrame.add(loginPanel);
+        bigFrame.setVisible(true);
+        if (rememberMe) {
+            rememberMeCheckbox.setSelected(true);
+            usernameField.setText(currentUser);
+            passwordField.setText(userCredentials.get(currentUser));
+        }
+    }
+    private static JPanel createLoginPanel() {
+        JPanel loginPanel = new JPanel(new GridLayout(5, 2));
+        JLabel userLabel = new JLabel("Username:");
+        usernameField = new JTextField();
+        loginPanel.add(userLabel);
+        loginPanel.add(usernameField);
+        JLabel passwordLabel = new JLabel("Password:");
+        passwordField = new JPasswordField();
+        loginPanel.add(passwordLabel);
+        loginPanel.add(passwordField);
+        rememberMeCheckbox = new JCheckBox("Remember Me");
+        loginPanel.add(rememberMeCheckbox);
+        JButton loginButton = new JButton("Login");
+        loginPanel.add(loginButton);
+        loginButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String enteredUsername = usernameField.getText();
+                String enteredPassword = new String(passwordField.getPassword());
+                if (!userCredentials.containsKey(enteredUsername) && !rememberMe) {
+                    int response = JOptionPane.showConfirmDialog(bigFrame,
+                            "User not found! Do you want to create a new account?", "Create Account",
+                            JOptionPane.YES_NO_OPTION);
+                    if (response == JOptionPane.YES_OPTION) {
+                        userCredentials.put(enteredUsername, enteredPassword);
+                        userHistory.put(enteredUsername, new ArrayList<>());
+                    } else {
+                        return;
+                    }
+                }
+                if (userCredentials.containsKey(enteredUsername) && userCredentials.get(enteredUsername).equals(enteredPassword)) {
+                    currentUser = enteredUsername;
+                    rememberMe = rememberMeCheckbox.isSelected();
+                    bigFrame.getContentPane().removeAll();
+                    JPanel periodTrackerPanel = createPeriodTrackerPanel();
+                    bigFrame.add(periodTrackerPanel);
+                    bigFrame.revalidate();
+                    bigFrame.repaint();
+                } else {
+                    JOptionPane.showMessageDialog(bigFrame, "Incorrect username or password. Try Again.");
+                }
+            }
+        });
+        return loginPanel;
+    }
+    private static JPanel createPeriodTrackerPanel() {
+        JPanel periodTrackerPanel = new JPanel(new GridLayout(8, 2));
+
+        JLabel startDateLabel = new JLabel("Period Start Date (DDMMYYYY):");
+        startDateField = new JTextField();
+        periodTrackerPanel.add(startDateLabel);
+        periodTrackerPanel.add(startDateField);
+
+        JLabel endDateLabel = new JLabel("Period End Date (DDMMYYYY):");
+        endDateField = new JTextField();
+        periodTrackerPanel.add(endDateLabel);
+        periodTrackerPanel.add(endDateField);
+
+        JLabel symptomsLabel = new JLabel("Symptoms:");
+        symptomsField = new JTextField();
+        periodTrackerPanel.add(symptomsLabel);
+        periodTrackerPanel.add(symptomsField);
+
+        JButton periodLengthButton = new JButton("Calculate Period Length");
+        periodLengthField = new JTextField();
+        periodLengthField.setEditable(false);
+        periodTrackerPanel.add(periodLengthButton);
+        periodTrackerPanel.add(periodLengthField);
+
+        JButton predictNextPeriodButton = new JButton("Predict Next Period Date");
+        nextPeriodDateField = new JTextField();
+        nextPeriodDateField.setEditable(false);
+        periodTrackerPanel.add(predictNextPeriodButton);
+        periodTrackerPanel.add(nextPeriodDateField);
+
+        JButton displayDetailsButton = new JButton("Display Entered Details");
+        periodTrackerPanel.add(displayDetailsButton);
+
+        JButton logoutButton = new JButton("Logout");
+        periodTrackerPanel.add(logoutButton);
+
+        logoutButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                currentUser = null;
+                bigFrame.getContentPane().removeAll();
+                JPanel loginPanel = createLoginPanel();
+                bigFrame.add(loginPanel);
+                bigFrame.revalidate();
+                bigFrame.repaint();
+                JOptionPane.showMessageDialog(bigFrame, "Logged Out Successfully!");
+            }
+        });
+
+        displayDetailsButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                displayEnteredDetails();
+            }
+        });
+
+        historyTable = createHistoryTable();
+        JScrollPane scrollPane = new JScrollPane(historyTable);
+        periodTrackerPanel.add(scrollPane);
+
+        periodLengthButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                calculatePeriodLength();
+            }
+        });
+
+        predictNextPeriodButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                predictNextPeriod();
+            }
+        });
+
+        return periodTrackerPanel;
+    }
+
+    private static JTable createHistoryTable() {
+        String[] columnNames = {"Start Date", "End Date", "Symptoms", "Period Length", "Next Prediction"};
+        DefaultTableModel model = new DefaultTableModel(columnNames, 0);
+        JTable historyTable = new JTable(model);
+
+        int[] columnWidths = {400, 400, 450, 400, 450};
+        for (int i = 0; i < columnWidths.length; i++) {
+            historyTable.getColumnModel().getColumn(i).setPreferredWidth(columnWidths[i]);
+        }
+
+        return historyTable;
+    }
+
+    private static void displayEnteredDetails() {
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("ddMMyyyy");
+            Date startDate = sdf.parse(startDateField.getText());
+            Date endDate = sdf.parse(endDateField.getText());
+            long periodLength = (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000);
+
+            SimpleDateFormat outputSdf = new SimpleDateFormat("MMM dd, yyyy");
+
+            Object[] rowData = {
+                    outputSdf.format(startDate),
+                    outputSdf.format(endDate),
+                    symptomsField.getText(),
+                    periodLength + " days",
+                    nextPeriodDateField.getText()
+            };
+
+            DefaultTableModel model = (DefaultTableModel) historyTable.getModel();
+            model.addRow(rowData);
+        } catch (ParseException ex) {
+            JOptionPane.showMessageDialog(bigFrame, "Invalid date format (DDMMYYYY)!");
+        }
+    }
+
+    private static void calculatePeriodLength() {
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("ddMMyyyy");
+            Date startDate = sdf.parse(startDateField.getText());
+            Date endDate = sdf.parse(endDateField.getText());
+            long periodLength = (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000);
+            periodLengthField.setText(String.valueOf(periodLength) + " days");
+        } catch (ParseException x) {
+            JOptionPane.showMessageDialog(bigFrame, "Invalid date format (DDMMYYYY)!");
+        }
+    }
+
+    private static void predictNextPeriod() {
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("ddMMyyyy");
+            Date startDate = sdf.parse(startDateField.getText());
+            long nextPeriodTime = startDate.getTime() + 28L * 24 * 60 * 60 * 1000;
+            Date nextPeriodDate = new Date(nextPeriodTime);
+            nextPeriodDateField.setText(sdf.format(nextPeriodDate));
+        } catch (ParseException ex) {
+            JOptionPane.showMessageDialog(bigFrame, "Invalid date format (DDMMYYYY)!");
+        }
+    }
+
+    public class PeriodRecord {
+        private LocalDate startDate;
+        private LocalDate endDate;
+        private String symptoms;
+        private long periodLength;
+        private LocalDate nextPeriodDate;
+
+        public PeriodRecord(LocalDate startDate, LocalDate endDate, String symptoms, long periodLength, LocalDate nextPeriodDate) {
+            this.startDate = startDate;
+            this.endDate = endDate;
+            this.symptoms = symptoms;
+            this.periodLength = periodLength;
+            this.nextPeriodDate = nextPeriodDate;
+        }
+
+        public LocalDate getStartDate() {
+            return startDate;
+        }
+
+        public LocalDate getEndDate() {
+            return endDate;
+        }
+
+        public String getSymptoms() {
+            return symptoms;
+        }
+
+        public long getPeriodLength() {
+            return periodLength;
+        }
+
+        public LocalDate getNextPeriodDate() {
+            return nextPeriodDate;
+        }
+    }
+}
